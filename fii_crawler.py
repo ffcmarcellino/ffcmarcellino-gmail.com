@@ -1,6 +1,4 @@
 import requests
-import asyncio
-import aiohttp
 from bs4 import BeautifulSoup
 import pandas as pd
 import json
@@ -17,10 +15,10 @@ def get_ticker_list():
 
 class fiiBaseCrawler:
 
-    def __init__(self, ticker):
+    def __init__(self, html1, html2):
 
-        self.soup1 = BeautifulSoup(page1.content, 'html.parser')
-        self.soup2 = BeautifulSoup(page2.content, 'html.parser')
+        self.soup1 = BeautifulSoup(html1, 'html.parser')
+        self.soup2 = BeautifulSoup(html2, 'html.parser')
 
     def get_name(self):
         name = self.soup1.find('section', id = "basic-infos").find_all('div', class_ = 'col-md-6 col-xs-12')[0].find_all('span', class_ = 'description')[0].get_text()
@@ -36,7 +34,10 @@ class fiiBaseCrawler:
 
     def get_p_vp(self):
         p_vp = self.soup1.find('section', id = "main-indicators").find_all('span', class_ = 'indicator-value')[6].get_text()
-        return float(p_vp.strip().replace(",","."))
+        try:
+            return float(p_vp.strip().replace(",","."))
+        except:
+            return None
 
     def get_current_price(self):
         current_price = self.soup1.find('span', class_ = "price").get_text()
@@ -47,12 +48,12 @@ class fiiBaseCrawler:
 
     def get_months(self):
         rows = self.soup2.find('table', id = "last-revenues--table").find_all('tr')[1:]
-        months = [tr.find_all("td")[1].get_text()[3:] for tr in rows]
+        months = [tr.find_all("td")[1].get_text()[3:] for tr in rows] if len(rows) > 0 else None
         return months
 
     def get_revenues(self):
         rows = self.soup2.find('table', id = "last-revenues--table").find_all('tr')[1:]
-        revenues = [float(tr.find_all("td")[4].get_text().replace("R$ ", "").replace(",", ".")) for tr in rows]
+        revenues = [float(tr.find_all("td")[4].get_text().replace("R$ ", "").replace(",", ".")) for tr in rows] if len(rows) > 0 else None
         return revenues
 
     def get_all_info(self):
@@ -62,25 +63,25 @@ class fiiCrawler(fiiBaseCrawler):
 
     def __init__(self, ticker_list):
         self.ticker_list = ticker_list
-        res = requests.get('http://127.0.0.1:3000/get-fii-info', params={'ticker_list': ticker_list}).text
-        with open('html.json', 'r', encoding='utf-8') as f:
-            self.html_list = json.load(f)
-        print(res)
+        with open('html1.json', 'r', encoding='utf-8') as f:
+            self.html1_dict = dict(json.load(f))
+        with open('html2.json', 'r', encoding='utf-8') as f:
+            self.html2_dict = dict(json.load(f))
 
-    def get_all_values(self, ticker_list, fun):
+    def get_all_values(self, fun):
         values = []
 
-        for i, ticker in enumerate(ticker_list):
-            fiiBaseCrawler.__init__(ticker)
+        for ticker in self.ticker_list:
+            fiiBaseCrawler.__init__(self, self.html1_dict[ticker], self.html2_dict[ticker])
             values.append(getattr(self, fun)())
 
         return values
 
-    def get_fii_df(self, ticker_list, name_list):
+    def get_fii_df(self):
         fii_infos = []
 
-        for ticker in enumerate(ticker_list):
-            fiiBaseCrawler.__init__(ticker)
+        for ticker in self.ticker_list:
+            fiiBaseCrawler.__init__(self, self.html1_dict[ticker], self.html2_dict[ticker])
             fii_info = [ticker]
             fii_info += self.get_all_info()
             fii_infos.append(fii_info)
